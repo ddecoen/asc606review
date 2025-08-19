@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASC 606 Revenue Recognition Analyzer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ASC 606 Revenue Recognition Analyzer</h1>
+            <p>Analyze order forms and contracts for proper revenue recognition under ASC 606</p>
+        </header>
+
+        <main>
+            <form id="orderForm" class="order-form">
+                <section class="contract-info">
+                    <h2>Contract Information</h2>
+                    <div class="form-group">
+                        <label for="customerName">Customer Name:</label>
+                        <input type="text" id="customerName" name="customerName" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="contractStart">Contract Start Date:</label>
+                            <input type="date" id="contractStart" name="contractStart" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="contractEnd">Contract End Date:</label>
+                            <input type="date" id="contractEnd" name="contractEnd" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="paymentTerms">Payment Terms:</label>
+                            <select id="paymentTerms" name="paymentTerms" required>
+                                <option value="">Select payment terms</option>
+                                <option value="net30">Net 30</option>
+                                <option value="net60">Net 60</option>
+                                <option value="upfront">Paid Upfront</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="annually">Annually</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="billingFrequency">Billing Frequency:</label>
+                            <select id="billingFrequency" name="billingFrequency" required>
+                                <option value="">Select billing frequency</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="annually">Annually</option>
+                                <option value="multi-year">Multi-Year</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="products-section">
+                    <h2>Products & Services</h2>
+                    <div id="productsContainer">
+                        <div class="product-item">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="productName0">Product/Service Name:</label>
+                                    <input type="text" id="productName0" name="products[0][name]" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="productType0">Type:</label>
+                                    <select id="productType0" name="products[0][type]" required>
+                                        <option value="">Select type</option>
+                                        <option value="software-license">Software License</option>
+                                        <option value="saas">SaaS/Subscription</option>
+                                        <option value="support">Support Services</option>
+                                        <option value="professional-services">Professional Services</option>
+                                        <option value="training">Training</option>
+                                        <option value="hardware">Hardware</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="quantity0">Quantity:</label>
+                                    <input type="number" id="quantity0" name="products[0][quantity]" step="0.01" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="unit0">Unit:</label>
+                                    <input type="text" id="unit0" name="products[0][unit]" placeholder="e.g., users, hours, licenses">
+                                </div>
+                                <div class="form-group">
+                                    <label for="listPrice0">List Price:</label>
+                                    <input type="number" id="listPrice0" name="products[0][listPrice]" step="0.01" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="salesPrice0">Sales Price:</label>
+                                    <input type="number" id="salesPrice0" name="products[0][salesPrice]" step="0.01" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="description0">Description/Terms:</label>
+                                <textarea id="description0" name="products[0][description]" rows="2" placeholder="Additional terms, conditions, or description"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="addProduct" class="btn-secondary">Add Another Product</button>
+                </section>
+
+                <section class="terms-section">
+                    <h2>Terms & Conditions</h2>
+                    <div class="form-group">
+                        <label for="termsText">Contract Terms & Conditions:</label>
+                        <textarea id="termsText" name="termsText" rows="8" placeholder="Paste the full terms and conditions here..."></textarea>
+                    </div>
+                    <div class="checkbox-group">
+                        <h3>Key Contract Features:</h3>
+                        <label><input type="checkbox" name="features" value="cancellation-rights"> Cancellation Rights</label>
+                        <label><input type="checkbox" name="features" value="refund-provisions"> Refund Provisions</label>
+                        <label><input type="checkbox" name="features" value="variable-consideration"> Variable Consideration</label>
+                        <label><input type="checkbox" name="features" value="usage-based"> Usage-Based Pricing</label>
+                        <label><input type="checkbox" name="features" value="renewal-options"> Renewal Options</label>
+                        <label><input type="checkbox" name="features" value="termination-clauses"> Termination Clauses</label>
+                        <label><input type="checkbox" name="features" value="performance-guarantees"> Performance Guarantees</label>
+                        <label><input type="checkbox" name="features" value="milestone-payments"> Milestone Payments</label>
+                    </div>
+                </section>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Analyze ASC 606 Compliance</button>
+                    <button type="button" id="clearForm" class="btn-secondary">Clear Form</button>
+                </div>
+            </form>
+
+            <div id="results" class="results-section" style="display: none;">
+                <h2>ASC 606 Analysis Results</h2>
+                <div id="analysisOutput"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
