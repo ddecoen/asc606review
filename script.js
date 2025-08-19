@@ -209,12 +209,16 @@ class ASC606Analyzer {
             case 'hardware':
                 return 'point-in-time';
             case 'software-license':
-                return product.description.toLowerCase().includes('perpetual') ? 'point-in-time' : 'over-time';
+                // Software licenses are recognized at point-in-time when license key is delivered
+                // Performance obligation is satisfied upon delivery of the license key
+                return 'point-in-time';
             case 'saas':
             case 'support':
                 return 'over-time';
             case 'professional-services':
                 return product.description.toLowerCase().includes('ongoing') ? 'over-time' : 'point-in-time';
+            case 'training':
+                return 'point-in-time';
             default:
                 return 'over-time';
         }
@@ -265,13 +269,29 @@ class ASC606Analyzer {
         
         data.products.forEach(product => {
             const pattern = this.determineDeliveryPattern(product);
+            let timing;
+            
+            if (pattern === 'point-in-time') {
+                if (product.type === 'software-license') {
+                    timing = 'Upon delivery of license key (contract start)';
+                } else if (product.type === 'hardware') {
+                    timing = 'Upon delivery/acceptance';
+                } else if (product.type === 'training') {
+                    timing = 'Upon completion of training';
+                } else {
+                    timing = 'Upon delivery/completion';
+                }
+            } else {
+                timing = 'Straight-line over contract term';
+            }
+            
             const monthlyAmount = pattern === 'over-time' ? 
                 (product.totalValue / contractDuration.months).toFixed(2) : 0;
             
             recognitionPatterns.push({
                 obligation: product.name,
                 pattern: pattern,
-                timing: pattern === 'point-in-time' ? 'Upon delivery/acceptance' : 'Straight-line over contract term',
+                timing: timing,
                 monthlyAmount: monthlyAmount,
                 totalAmount: product.totalValue
             });
@@ -287,6 +307,16 @@ class ASC606Analyzer {
 
     generateRecommendations(data) {
         const recommendations = [];
+        
+        // Check for software license specific guidance
+        const softwareLicenses = data.products.filter(p => p.type === 'software-license');
+        if (softwareLicenses.length > 0) {
+            recommendations.push({
+                type: 'info',
+                title: 'Software License Recognition',
+                description: 'Software licenses are recognized at point-in-time upon delivery of the license key. Performance obligation is satisfied when customer gains control of the license, typically at contract start.'
+            });
+        }
         
         // Check for common issues
         if (data.features.includes('variable-consideration')) {
@@ -310,6 +340,18 @@ class ASC606Analyzer {
                 type: 'info',
                 title: 'Support Services Pricing',
                 description: 'Significant discount on support services may indicate bundled pricing. Consider standalone selling price analysis.'
+            });
+        }
+        
+        // Check for mixed recognition patterns
+        const pointInTimeProducts = data.products.filter(p => this.determineDeliveryPattern(p) === 'point-in-time');
+        const overTimeProducts = data.products.filter(p => this.determineDeliveryPattern(p) === 'over-time');
+        
+        if (pointInTimeProducts.length > 0 && overTimeProducts.length > 0) {
+            recommendations.push({
+                type: 'info',
+                title: 'Mixed Recognition Patterns',
+                description: `Contract contains both point-in-time (${pointInTimeProducts.length} items) and over-time (${overTimeProducts.length} items) recognition. Ensure proper timing for each performance obligation.`
             });
         }
         
@@ -377,7 +419,17 @@ class ASC606Analyzer {
             .filter(p => p.pattern === 'point-in-time')
             .reduce((sum, p) => sum + p.totalAmount, 0);
         
-        return `Revenue recognition: $${overTimeRevenue.toLocaleString()} over time, $${pointInTimeRevenue.toLocaleString()} at point in time`;
+        const softwareLicenseRevenue = patterns
+            .filter(p => p.pattern === 'point-in-time' && p.obligation.toLowerCase().includes('license'))
+            .reduce((sum, p) => sum + p.totalAmount, 0);
+        
+        let assessment = `Revenue recognition: $${pointInTimeRevenue.toLocaleString()} at point in time, $${overTimeRevenue.toLocaleString()} over time`;
+        
+        if (softwareLicenseRevenue > 0) {
+            assessment += `. Software licenses ($${softwareLicenseRevenue.toLocaleString()}) recognized upon license key delivery.`;
+        }
+        
+        return assessment;
     }
 
     assessPerformanceObligations(distinct, bundled) {
