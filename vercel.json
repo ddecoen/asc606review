@@ -1,19 +1,6 @@
 {
   "version": 2,
   "name": "asc606-analyzer",
-  "builds": [
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
-  "functions": {},
   "rewrites": [
     {
       "source": "/(.*)",
