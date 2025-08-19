@@ -65,6 +65,35 @@ class ASC606Analyzer {
                 <label for="description${this.productCounter}">Description/Terms:</label>
                 <textarea id="description${this.productCounter}" name="products[${this.productCounter}][description]" rows="2" placeholder="Additional terms, conditions, or description"></textarea>
             </div>
+            
+            <!-- SSP Allocation Section -->
+            <div class="ssp-allocation">
+                <h4>SSP Allocation (Optional)</h4>
+                <p class="ssp-help">Allocate this product's price between different performance obligations (e.g., 85% license, 15% support)</p>
+                <div class="allocation-row">
+                    <div class="form-group">
+                        <label for="licenseAllocation${this.productCounter}">License Allocation (%):</label>
+                        <input type="number" id="licenseAllocation${this.productCounter}" name="products[${this.productCounter}][licenseAllocation]" min="0" max="100" step="1" placeholder="85">
+                    </div>
+                    <div class="form-group">
+                        <label for="supportAllocation${this.productCounter}">Support Allocation (%):</label>
+                        <input type="number" id="supportAllocation${this.productCounter}" name="products[${this.productCounter}][supportAllocation]" min="0" max="100" step="1" placeholder="15">
+                    </div>
+                </div>
+                <div class="allocation-row">
+                    <div class="form-group">
+                        <label for="otherAllocation${this.productCounter}">Other Allocation (%):</label>
+                        <input type="number" id="otherAllocation${this.productCounter}" name="products[${this.productCounter}][otherAllocation]" min="0" max="100" step="1" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="otherDescription${this.productCounter}">Other Description:</label>
+                        <input type="text" id="otherDescription${this.productCounter}" name="products[${this.productCounter}][otherDescription]" placeholder="e.g., Training, Implementation">
+                    </div>
+                </div>
+                <div class="allocation-total" id="allocationTotal${this.productCounter}">
+                    <small>Total allocation: <span class="total-percent">0%</span></small>
+                </div>
+            </div>
             <button type="button" class="remove-product btn-danger" onclick="this.parentElement.remove()">Remove</button>
         `;
         container.appendChild(productItem);
@@ -95,6 +124,7 @@ class ASC606Analyzer {
             customer: formData.get('customerName'),
             contractStart: formData.get('contractStart'),
             contractEnd: formData.get('contractEnd'),
+            contractLength: parseFloat(formData.get('contractLength')),
             paymentTerms: formData.get('paymentTerms'),
             billingFrequency: formData.get('billingFrequency'),
             termsText: formData.get('termsText'),
@@ -112,9 +142,34 @@ class ASC606Analyzer {
                 unit: formData.get(`products[${productIndex}][unit]`),
                 listPrice: parseFloat(formData.get(`products[${productIndex}][listPrice]`)),
                 salesPrice: parseFloat(formData.get(`products[${productIndex}][salesPrice]`)),
-                description: formData.get(`products[${productIndex}][description]`)
+                description: formData.get(`products[${productIndex}][description]`),
+                // SSP Allocation data
+                licenseAllocation: parseFloat(formData.get(`products[${productIndex}][licenseAllocation]`)) || 0,
+                supportAllocation: parseFloat(formData.get(`products[${productIndex}][supportAllocation]`)) || 0,
+                otherAllocation: parseFloat(formData.get(`products[${productIndex}][otherAllocation]`)) || 0,
+                otherDescription: formData.get(`products[${productIndex}][otherDescription]`) || ''
             };
             product.totalValue = product.quantity * product.salesPrice;
+            
+            // Calculate allocated amounts if SSP allocation is provided
+            if (product.licenseAllocation > 0 || product.supportAllocation > 0 || product.otherAllocation > 0) {
+                product.allocatedComponents = {
+                    license: {
+                        percentage: product.licenseAllocation,
+                        amount: (product.totalValue * product.licenseAllocation / 100)
+                    },
+                    support: {
+                        percentage: product.supportAllocation,
+                        amount: (product.totalValue * product.supportAllocation / 100)
+                    },
+                    other: {
+                        percentage: product.otherAllocation,
+                        amount: (product.totalValue * product.otherAllocation / 100),
+                        description: product.otherDescription
+                    }
+                };
+            }
+            
             data.products.push(product);
             productIndex++;
         }
@@ -173,18 +228,58 @@ class ASC606Analyzer {
         const bundledServices = [];
         
         data.products.forEach(product => {
-            const obligation = {
-                name: product.name,
-                type: product.type,
-                distinct: this.assessDistinctness(product, data.products),
-                deliveryPattern: this.determineDeliveryPattern(product),
-                value: product.totalValue
-            };
-            
-            if (obligation.distinct) {
-                obligations.push(obligation);
+            // If product has SSP allocation, create separate obligations for each component
+            if (product.allocatedComponents) {
+                if (product.allocatedComponents.license.amount > 0) {
+                    obligations.push({
+                        name: `${product.name} - License`,
+                        type: 'software-license',
+                        distinct: true,
+                        deliveryPattern: 'point-in-time',
+                        value: product.allocatedComponents.license.amount,
+                        percentage: product.allocatedComponents.license.percentage,
+                        parentProduct: product.name
+                    });
+                }
+                
+                if (product.allocatedComponents.support.amount > 0) {
+                    obligations.push({
+                        name: `${product.name} - Support`,
+                        type: 'support',
+                        distinct: true,
+                        deliveryPattern: 'over-time',
+                        value: product.allocatedComponents.support.amount,
+                        percentage: product.allocatedComponents.support.percentage,
+                        parentProduct: product.name
+                    });
+                }
+                
+                if (product.allocatedComponents.other.amount > 0) {
+                    obligations.push({
+                        name: `${product.name} - ${product.allocatedComponents.other.description}`,
+                        type: 'other',
+                        distinct: true,
+                        deliveryPattern: this.determineDeliveryPattern({type: 'other', description: product.allocatedComponents.other.description}),
+                        value: product.allocatedComponents.other.amount,
+                        percentage: product.allocatedComponents.other.percentage,
+                        parentProduct: product.name
+                    });
+                }
             } else {
-                bundledServices.push(obligation);
+                // Standard product without SSP allocation
+                const obligation = {
+                    name: product.name,
+                    type: product.type,
+                    distinct: this.assessDistinctness(product, data.products),
+                    deliveryPattern: this.determineDeliveryPattern(product),
+                    value: product.totalValue
+                };
+                
+                if (obligation.distinct) {
+                    obligations.push(obligation);
+                } else {
+                    bundledServices.push(obligation);
+                }
             }
         });
 
@@ -247,54 +342,137 @@ class ASC606Analyzer {
         const allocations = [];
         
         data.products.forEach(product => {
-            allocations.push({
-                obligation: product.name,
-                allocatedAmount: product.totalValue,
-                percentage: (product.totalValue / totalValue * 100).toFixed(1),
-                method: 'contract-price'
-            });
+            if (product.allocatedComponents) {
+                // SSP allocated product - show each component
+                if (product.allocatedComponents.license.amount > 0) {
+                    allocations.push({
+                        obligation: `${product.name} - License`,
+                        allocatedAmount: product.allocatedComponents.license.amount,
+                        percentage: ((product.allocatedComponents.license.amount / totalValue) * 100).toFixed(1),
+                        method: 'SSP-allocation',
+                        sspPercentage: product.allocatedComponents.license.percentage
+                    });
+                }
+                
+                if (product.allocatedComponents.support.amount > 0) {
+                    allocations.push({
+                        obligation: `${product.name} - Support`,
+                        allocatedAmount: product.allocatedComponents.support.amount,
+                        percentage: ((product.allocatedComponents.support.amount / totalValue) * 100).toFixed(1),
+                        method: 'SSP-allocation',
+                        sspPercentage: product.allocatedComponents.support.percentage
+                    });
+                }
+                
+                if (product.allocatedComponents.other.amount > 0) {
+                    allocations.push({
+                        obligation: `${product.name} - ${product.allocatedComponents.other.description}`,
+                        allocatedAmount: product.allocatedComponents.other.amount,
+                        percentage: ((product.allocatedComponents.other.amount / totalValue) * 100).toFixed(1),
+                        method: 'SSP-allocation',
+                        sspPercentage: product.allocatedComponents.other.percentage
+                    });
+                }
+            } else {
+                // Standard product allocation
+                allocations.push({
+                    obligation: product.name,
+                    allocatedAmount: product.totalValue,
+                    percentage: (product.totalValue / totalValue * 100).toFixed(1),
+                    method: 'contract-price'
+                });
+            }
         });
         
+        const hasSSPAllocations = allocations.some(a => a.method === 'SSP-allocation');
+        
         return {
-            method: 'contract-price',
+            method: hasSSPAllocations ? 'SSP-allocation' : 'contract-price',
             allocations: allocations,
             totalAllocated: totalValue,
-            assessment: 'Transaction price allocated based on contract pricing'
+            assessment: hasSSPAllocations ? 
+                'Transaction price allocated using Standalone Selling Price (SSP) method for bundled products' :
+                'Transaction price allocated based on contract pricing'
         };
     }
 
     determineRevenueRecognition(data) {
         const recognitionPatterns = [];
-        const contractDuration = this.calculateContractDuration(data.contractStart, data.contractEnd);
+        const contractDuration = {
+            years: data.contractLength,
+            months: data.contractLength * 12
+        };
         
         data.products.forEach(product => {
-            const pattern = this.determineDeliveryPattern(product);
-            let timing;
-            
-            if (pattern === 'point-in-time') {
-                if (product.type === 'software-license') {
-                    timing = 'Upon delivery of license key (contract start)';
-                } else if (product.type === 'hardware') {
-                    timing = 'Upon delivery/acceptance';
-                } else if (product.type === 'training') {
-                    timing = 'Upon completion of training';
-                } else {
-                    timing = 'Upon delivery/completion';
+            // If product has SSP allocation, create patterns for each component
+            if (product.allocatedComponents) {
+                if (product.allocatedComponents.license.amount > 0) {
+                    recognitionPatterns.push({
+                        obligation: `${product.name} - License`,
+                        pattern: 'point-in-time',
+                        timing: 'Upon delivery of license key (contract start)',
+                        monthlyAmount: 0,
+                        totalAmount: product.allocatedComponents.license.amount,
+                        percentage: product.allocatedComponents.license.percentage
+                    });
+                }
+                
+                if (product.allocatedComponents.support.amount > 0) {
+                    const monthlyAmount = (product.allocatedComponents.support.amount / contractDuration.months).toFixed(2);
+                    recognitionPatterns.push({
+                        obligation: `${product.name} - Support`,
+                        pattern: 'over-time',
+                        timing: 'Straight-line over contract term',
+                        monthlyAmount: monthlyAmount,
+                        totalAmount: product.allocatedComponents.support.amount,
+                        percentage: product.allocatedComponents.support.percentage
+                    });
+                }
+                
+                if (product.allocatedComponents.other.amount > 0) {
+                    const pattern = this.determineDeliveryPattern({type: 'other', description: product.allocatedComponents.other.description});
+                    const monthlyAmount = pattern === 'over-time' ? 
+                        (product.allocatedComponents.other.amount / contractDuration.months).toFixed(2) : 0;
+                    
+                    recognitionPatterns.push({
+                        obligation: `${product.name} - ${product.allocatedComponents.other.description}`,
+                        pattern: pattern,
+                        timing: pattern === 'point-in-time' ? 'Upon delivery/completion' : 'Straight-line over contract term',
+                        monthlyAmount: monthlyAmount,
+                        totalAmount: product.allocatedComponents.other.amount,
+                        percentage: product.allocatedComponents.other.percentage
+                    });
                 }
             } else {
-                timing = 'Straight-line over contract term';
+                // Standard product without SSP allocation
+                const pattern = this.determineDeliveryPattern(product);
+                let timing;
+                
+                if (pattern === 'point-in-time') {
+                    if (product.type === 'software-license') {
+                        timing = 'Upon delivery of license key (contract start)';
+                    } else if (product.type === 'hardware') {
+                        timing = 'Upon delivery/acceptance';
+                    } else if (product.type === 'training') {
+                        timing = 'Upon completion of training';
+                    } else {
+                        timing = 'Upon delivery/completion';
+                    }
+                } else {
+                    timing = 'Straight-line over contract term';
+                }
+                
+                const monthlyAmount = pattern === 'over-time' ? 
+                    (product.totalValue / contractDuration.months).toFixed(2) : 0;
+                
+                recognitionPatterns.push({
+                    obligation: product.name,
+                    pattern: pattern,
+                    timing: timing,
+                    monthlyAmount: monthlyAmount,
+                    totalAmount: product.totalValue
+                });
             }
-            
-            const monthlyAmount = pattern === 'over-time' ? 
-                (product.totalValue / contractDuration.months).toFixed(2) : 0;
-            
-            recognitionPatterns.push({
-                obligation: product.name,
-                pattern: pattern,
-                timing: timing,
-                monthlyAmount: monthlyAmount,
-                totalAmount: product.totalValue
-            });
         });
         
         return {
@@ -522,10 +700,11 @@ class ASC606Analyzer {
                     </div>
                     <div class="allocation-table">
                         ${analysis.step4.allocations.map(allocation => `
-                            <div class="allocation-row">
+                            <div class="allocation-table-row">
                                 <span class="obligation-name">${allocation.obligation}</span>
                                 <span class="allocation-amount">$${allocation.allocatedAmount.toLocaleString()}</span>
                                 <span class="allocation-percentage">(${allocation.percentage}%)</span>
+                                ${allocation.sspPercentage ? `<span class="ssp-info">SSP: ${allocation.sspPercentage}%</span>` : ''}
                             </div>
                         `).join('')}
                     </div>
@@ -540,9 +719,11 @@ class ASC606Analyzer {
                         ${analysis.step5.patterns.map(pattern => `
                             <div class="pattern-item">
                                 <strong>${pattern.obligation}</strong>
+                                ${pattern.percentage ? `<span class="ssp-badge">SSP: ${pattern.percentage}%</span>` : ''}
                                 <br>Pattern: ${pattern.pattern}
                                 <br>Timing: ${pattern.timing}
                                 ${pattern.monthlyAmount > 0 ? `<br>Monthly: $${parseFloat(pattern.monthlyAmount).toLocaleString()}` : ''}
+                                <br>Total: $${pattern.totalAmount.toLocaleString()}
                             </div>
                         `).join('')}
                     </div>

@@ -30,6 +30,10 @@
                             <label for="contractEnd">Contract End Date:</label>
                             <input type="date" id="contractEnd" name="contractEnd" required>
                         </div>
+                        <div class="form-group">
+                            <label for="contractLength">Contract Length (Years):</label>
+                            <input type="number" id="contractLength" name="contractLength" step="0.1" min="0.1" placeholder="e.g., 3.0" required>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -101,6 +105,35 @@
                             <div class="form-group">
                                 <label for="description0">Description/Terms:</label>
                                 <textarea id="description0" name="products[0][description]" rows="2" placeholder="Additional terms, conditions, or description"></textarea>
+                            </div>
+                            
+                            <!-- SSP Allocation Section -->
+                            <div class="ssp-allocation">
+                                <h4>SSP Allocation (Optional)</h4>
+                                <p class="ssp-help">Allocate this product's price between different performance obligations (e.g., 85% license, 15% support)</p>
+                                <div class="allocation-row">
+                                    <div class="form-group">
+                                        <label for="licenseAllocation0">License Allocation (%):</label>
+                                        <input type="number" id="licenseAllocation0" name="products[0][licenseAllocation]" min="0" max="100" step="1" placeholder="85">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="supportAllocation0">Support Allocation (%):</label>
+                                        <input type="number" id="supportAllocation0" name="products[0][supportAllocation]" min="0" max="100" step="1" placeholder="15">
+                                    </div>
+                                </div>
+                                <div class="allocation-row">
+                                    <div class="form-group">
+                                        <label for="otherAllocation0">Other Allocation (%):</label>
+                                        <input type="number" id="otherAllocation0" name="products[0][otherAllocation]" min="0" max="100" step="1" placeholder="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="otherDescription0">Other Description:</label>
+                                        <input type="text" id="otherDescription0" name="products[0][otherDescription]" placeholder="e.g., Training, Implementation">
+                                    </div>
+                                </div>
+                                <div class="allocation-total" id="allocationTotal0">
+                                    <small>Total allocation: <span class="total-percent">0%</span></small>
+                                </div>
                             </div>
                         </div>
                     </div>
