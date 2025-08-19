@@ -17,6 +17,32 @@ class ASC606Analyzer {
         document.getElementById('clearForm').addEventListener('click', () => {
             this.clearForm();
         });
+        
+        // Add listener for initial product type change
+        document.getElementById('productType0').addEventListener('change', (e) => {
+            this.toggleSSPSection(0, e.target.value);
+        });
+    }
+    
+    toggleSSPSection(index, productType) {
+        const sspSection = document.getElementById(`sspSection${index}`);
+        if (sspSection) {
+            if (productType === 'software-license') {
+                sspSection.style.display = 'block';
+            } else {
+                sspSection.style.display = 'none';
+                // Clear SSP values when hiding
+                const licenseInput = document.getElementById(`licenseAllocation${index}`);
+                const supportInput = document.getElementById(`supportAllocation${index}`);
+                const otherInput = document.getElementById(`otherAllocation${index}`);
+                const otherDescInput = document.getElementById(`otherDescription${index}`);
+                
+                if (licenseInput) licenseInput.value = '';
+                if (supportInput) supportInput.value = '';
+                if (otherInput) otherInput.value = '';
+                if (otherDescInput) otherDescInput.value = '';
+            }
+        }
     }
 
     addProductRow() {
@@ -67,9 +93,9 @@ class ASC606Analyzer {
             </div>
             
             <!-- SSP Allocation Section -->
-            <div class="ssp-allocation">
-                <h4>SSP Allocation (Optional)</h4>
-                <p class="ssp-help">Allocate this product's price between different performance obligations (e.g., 85% license, 15% support)</p>
+            <div class="ssp-allocation" id="sspSection${this.productCounter}" style="display: none;">
+                <h4>SSP Allocation (Software License Only)</h4>
+                <p class="ssp-help">Allocate this software license price between license and support components (e.g., 85% license, 15% support)</p>
                 <div class="allocation-row">
                     <div class="form-group">
                         <label for="licenseAllocation${this.productCounter}">License Allocation (%):</label>
@@ -97,6 +123,12 @@ class ASC606Analyzer {
             <button type="button" class="remove-product btn-danger" onclick="this.parentElement.remove()">Remove</button>
         `;
         container.appendChild(productItem);
+        
+        // Add event listener for the new product type selector
+        document.getElementById(`productType${this.productCounter}`).addEventListener('change', (e) => {
+            this.toggleSSPSection(this.productCounter, e.target.value);
+        });
+        
         this.productCounter++;
     }
 
@@ -235,7 +267,7 @@ class ASC606Analyzer {
                         name: `${product.name} - License`,
                         type: 'software-license',
                         distinct: true,
-                        deliveryPattern: 'point-in-time',
+                        deliveryPattern: 'point-in-time', // License is always point-in-time
                         value: product.allocatedComponents.license.amount,
                         percentage: product.allocatedComponents.license.percentage,
                         parentProduct: product.name
@@ -247,7 +279,7 @@ class ASC606Analyzer {
                         name: `${product.name} - Support`,
                         type: 'support',
                         distinct: true,
-                        deliveryPattern: 'over-time',
+                        deliveryPattern: 'over-time', // Support is always over-time
                         value: product.allocatedComponents.support.amount,
                         percentage: product.allocatedComponents.support.percentage,
                         parentProduct: product.name
@@ -409,7 +441,7 @@ class ASC606Analyzer {
                 if (product.allocatedComponents.license.amount > 0) {
                     recognitionPatterns.push({
                         obligation: `${product.name} - License`,
-                        pattern: 'point-in-time',
+                        pattern: 'point-in-time', // License is always point-in-time
                         timing: 'Upon delivery of license key (contract start)',
                         monthlyAmount: 0,
                         totalAmount: product.allocatedComponents.license.amount,
@@ -421,7 +453,7 @@ class ASC606Analyzer {
                     const monthlyAmount = (product.allocatedComponents.support.amount / contractDuration.months).toFixed(2);
                     recognitionPatterns.push({
                         obligation: `${product.name} - Support`,
-                        pattern: 'over-time',
+                        pattern: 'over-time', // Support is always over-time
                         timing: 'Straight-line over contract term',
                         monthlyAmount: monthlyAmount,
                         totalAmount: product.allocatedComponents.support.amount,
@@ -489,11 +521,21 @@ class ASC606Analyzer {
         // Check for software license specific guidance
         const softwareLicenses = data.products.filter(p => p.type === 'software-license');
         if (softwareLicenses.length > 0) {
-            recommendations.push({
-                type: 'info',
-                title: 'Software License Recognition',
-                description: 'Software licenses are recognized at point-in-time upon delivery of the license key. Performance obligation is satisfied when customer gains control of the license, typically at contract start.'
-            });
+            const hasSSPAllocation = softwareLicenses.some(p => p.allocatedComponents);
+            
+            if (hasSSPAllocation) {
+                recommendations.push({
+                    type: 'info',
+                    title: 'Software License SSP Allocation',
+                    description: 'Software license with SSP allocation: License component recognized at point-in-time upon delivery of license key, Support component recognized ratably over contract term.'
+                });
+            } else {
+                recommendations.push({
+                    type: 'info',
+                    title: 'Software License Recognition',
+                    description: 'Software licenses are recognized at point-in-time upon delivery of the license key. Performance obligation is satisfied when customer gains control of the license, typically at contract start.'
+                });
+            }
         }
         
         // Check for common issues
