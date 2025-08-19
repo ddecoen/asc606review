@@ -1,0 +1,24 @@
+{
+  "name": "asc606-analyzer",
+  "version": "1.0.0",
+  "description": "ASC 606 Revenue Recognition Analyzer - Web application for analyzing order forms and contracts",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "dev": "python3 -m http.server 8000"
+  },
+  "keywords": [
+    "asc606",
+    "revenue-recognition",
+    "accounting",
+    "contract-analysis",
+    "webapp"
+  ],
+  "author": "ddecoen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ddecoen/asc606review.git"
+  },
+  "homepage": "https://github.com/ddecoen/asc606review"
+}
