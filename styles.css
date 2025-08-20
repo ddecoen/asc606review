@@ -547,6 +547,17 @@ textarea {
     margin-left: 8px;
 }
 
+.pattern-note {
+    color: #666;
+    font-size: 0.8rem;
+    font-style: italic;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+    display: inline-block;
+}
+
 @media (max-width: 768px) {
     .container {
         padding: 10px;

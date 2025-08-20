@@ -529,47 +529,50 @@ class ASC606Analyzer {
         data.products.forEach(product => {
             // Handle software licenses with SSP allocation specially
             if (product.type === 'software-license' && product.allocatedComponents) {
-                // License component - point-in-time recognition
+                // License component - point-in-time recognition (ANNUAL AMOUNT ONLY)
                 if (product.allocatedComponents.license.amount > 0) {
                     recognitionPatterns.push({
-                        obligation: `${product.name} - License Component`,
+                        obligation: `${product.name} - License Component (Year 1)`,
                         pattern: 'point-in-time',
                         timing: 'Upon delivery of license key (contract start)',
                         monthlyAmount: 0,
-                        totalAmount: product.allocatedComponents.license.amount,
+                        totalAmount: product.allocatedComponents.license.annualAmount,
                         percentage: product.allocatedComponents.license.percentage,
-                        componentType: 'license'
+                        componentType: 'license',
+                        note: 'Annual license delivery - subsequent years recognized upon renewal'
                     });
                 }
                 
-                // Support component - over-time recognition
+                // Support component - over-time recognition (ANNUAL AMOUNT)
                 if (product.allocatedComponents.support.amount > 0) {
-                    const monthlyAmount = (product.allocatedComponents.support.amount / contractDuration.months).toFixed(2);
+                    const monthlyAmount = (product.allocatedComponents.support.annualAmount / 12).toFixed(2);
                     recognitionPatterns.push({
-                        obligation: `${product.name} - Support Component`,
+                        obligation: `${product.name} - Support Component (Annual)`,
                         pattern: 'over-time',
-                        timing: 'Straight-line over contract term',
+                        timing: 'Straight-line over 12 months',
                         monthlyAmount: monthlyAmount,
-                        totalAmount: product.allocatedComponents.support.amount,
+                        totalAmount: product.allocatedComponents.support.annualAmount,
                         percentage: product.allocatedComponents.support.percentage,
-                        componentType: 'support'
+                        componentType: 'support',
+                        note: 'Annual support service'
                     });
                 }
                 
-                // Other component if present
+                // Other component if present (ANNUAL AMOUNT)
                 if (product.allocatedComponents.other.amount > 0) {
                     const pattern = 'point-in-time'; // Default for other components
                     const monthlyAmount = pattern === 'over-time' ? 
-                        (product.allocatedComponents.other.amount / contractDuration.months).toFixed(2) : 0;
+                        (product.allocatedComponents.other.annualAmount / 12).toFixed(2) : 0;
                     
                     recognitionPatterns.push({
-                        obligation: `${product.name} - ${product.allocatedComponents.other.description}`,
+                        obligation: `${product.name} - ${product.allocatedComponents.other.description} (Annual)`,
                         pattern: pattern,
-                        timing: pattern === 'point-in-time' ? 'Upon delivery/completion' : 'Straight-line over contract term',
+                        timing: pattern === 'point-in-time' ? 'Upon delivery/completion' : 'Straight-line over 12 months',
                         monthlyAmount: monthlyAmount,
-                        totalAmount: product.allocatedComponents.other.amount,
+                        totalAmount: product.allocatedComponents.other.annualAmount,
                         percentage: product.allocatedComponents.other.percentage,
-                        componentType: 'other'
+                        componentType: 'other',
+                        note: 'Annual component'
                     });
                 }
             } else if (product.allocatedComponents) {
@@ -783,12 +786,12 @@ class ASC606Analyzer {
             .filter(p => p.componentType === 'support')
             .reduce((sum, p) => sum + p.totalAmount, 0);
         
-        let assessment = `Revenue recognition: $${pointInTimeRevenue.toLocaleString()} at point in time, $${overTimeRevenue.toLocaleString()} over time`;
+        let assessment = `Annual revenue recognition: $${pointInTimeRevenue.toLocaleString()} at point in time, $${overTimeRevenue.toLocaleString()} over time`;
         
         if (licenseComponentRevenue > 0 && supportComponentRevenue > 0) {
-            assessment += `. SSP Allocation: License component ($${licenseComponentRevenue.toLocaleString()}) recognized upon delivery, Support component ($${supportComponentRevenue.toLocaleString()}) recognized ratably.`;
+            assessment += `. SSP Allocation (Year 1): License component ($${licenseComponentRevenue.toLocaleString()}) recognized upon delivery, Support component ($${supportComponentRevenue.toLocaleString()}) recognized ratably over 12 months.`;
         } else if (licenseComponentRevenue > 0) {
-            assessment += `. Software licenses ($${licenseComponentRevenue.toLocaleString()}) recognized upon license key delivery.`;
+            assessment += `. Software licenses ($${licenseComponentRevenue.toLocaleString()}) recognized upon license key delivery for Year 1.`;
         }
         
         return assessment;
@@ -916,6 +919,7 @@ class ASC606Analyzer {
                                 <br>Timing: ${pattern.timing}
                                 ${pattern.monthlyAmount > 0 ? `<br>Monthly: $${parseFloat(pattern.monthlyAmount).toLocaleString()}` : ''}
                                 <br>Total: $${pattern.totalAmount.toLocaleString()}
+                                ${pattern.note ? `<br><small class="pattern-note">${pattern.note}</small>` : ''}
                             </div>
                         `).join('')}
                     </div>
