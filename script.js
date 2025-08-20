@@ -260,14 +260,41 @@ class ASC606Analyzer {
         const bundledServices = [];
         
         data.products.forEach(product => {
-            // If product has SSP allocation, create separate obligations for each component
-            if (product.allocatedComponents) {
+            // For software licenses with SSP allocation, treat as single product with mixed recognition
+            if (product.type === 'software-license' && product.allocatedComponents) {
+                obligations.push({
+                    name: product.name,
+                    type: 'software-license',
+                    distinct: true,
+                    deliveryPattern: 'mixed', // Mixed recognition pattern
+                    value: product.totalValue,
+                    sspAllocation: {
+                        license: {
+                            percentage: product.allocatedComponents.license.percentage,
+                            amount: product.allocatedComponents.license.amount,
+                            pattern: 'point-in-time'
+                        },
+                        support: {
+                            percentage: product.allocatedComponents.support.percentage,
+                            amount: product.allocatedComponents.support.amount,
+                            pattern: 'over-time'
+                        },
+                        other: product.allocatedComponents.other.amount > 0 ? {
+                            percentage: product.allocatedComponents.other.percentage,
+                            amount: product.allocatedComponents.other.amount,
+                            description: product.allocatedComponents.other.description,
+                            pattern: 'point-in-time' // Default for other components
+                        } : null
+                    }
+                });
+            } else if (product.allocatedComponents) {
+                // Non-software license products with SSP allocation (shouldn't happen now, but keeping for safety)
                 if (product.allocatedComponents.license.amount > 0) {
                     obligations.push({
                         name: `${product.name} - License`,
                         type: 'software-license',
                         distinct: true,
-                        deliveryPattern: 'point-in-time', // License is always point-in-time
+                        deliveryPattern: 'point-in-time',
                         value: product.allocatedComponents.license.amount,
                         percentage: product.allocatedComponents.license.percentage,
                         parentProduct: product.name
@@ -279,7 +306,7 @@ class ASC606Analyzer {
                         name: `${product.name} - Support`,
                         type: 'support',
                         distinct: true,
-                        deliveryPattern: 'over-time', // Support is always over-time
+                        deliveryPattern: 'over-time',
                         value: product.allocatedComponents.support.amount,
                         percentage: product.allocatedComponents.support.percentage,
                         parentProduct: product.name
@@ -374,8 +401,39 @@ class ASC606Analyzer {
         const allocations = [];
         
         data.products.forEach(product => {
-            if (product.allocatedComponents) {
-                // SSP allocated product - show each component
+            if (product.type === 'software-license' && product.allocatedComponents) {
+                // Software license with SSP allocation - show as components
+                if (product.allocatedComponents.license.amount > 0) {
+                    allocations.push({
+                        obligation: `${product.name} - License Component`,
+                        allocatedAmount: product.allocatedComponents.license.amount,
+                        percentage: ((product.allocatedComponents.license.amount / totalValue) * 100).toFixed(1),
+                        method: 'SSP-allocation',
+                        sspPercentage: product.allocatedComponents.license.percentage
+                    });
+                }
+                
+                if (product.allocatedComponents.support.amount > 0) {
+                    allocations.push({
+                        obligation: `${product.name} - Support Component`,
+                        allocatedAmount: product.allocatedComponents.support.amount,
+                        percentage: ((product.allocatedComponents.support.amount / totalValue) * 100).toFixed(1),
+                        method: 'SSP-allocation',
+                        sspPercentage: product.allocatedComponents.support.percentage
+                    });
+                }
+                
+                if (product.allocatedComponents.other.amount > 0) {
+                    allocations.push({
+                        obligation: `${product.name} - ${product.allocatedComponents.other.description}`,
+                        allocatedAmount: product.allocatedComponents.other.amount,
+                        percentage: ((product.allocatedComponents.other.amount / totalValue) * 100).toFixed(1),
+                        method: 'SSP-allocation',
+                        sspPercentage: product.allocatedComponents.other.percentage
+                    });
+                }
+            } else if (product.allocatedComponents) {
+                // Other products with SSP allocation (legacy support)
                 if (product.allocatedComponents.license.amount > 0) {
                     allocations.push({
                         obligation: `${product.name} - License`,
@@ -436,12 +494,57 @@ class ASC606Analyzer {
         };
         
         data.products.forEach(product => {
-            // If product has SSP allocation, create patterns for each component
-            if (product.allocatedComponents) {
+            // Handle software licenses with SSP allocation specially
+            if (product.type === 'software-license' && product.allocatedComponents) {
+                // License component - point-in-time recognition
+                if (product.allocatedComponents.license.amount > 0) {
+                    recognitionPatterns.push({
+                        obligation: `${product.name} - License Component`,
+                        pattern: 'point-in-time',
+                        timing: 'Upon delivery of license key (contract start)',
+                        monthlyAmount: 0,
+                        totalAmount: product.allocatedComponents.license.amount,
+                        percentage: product.allocatedComponents.license.percentage,
+                        componentType: 'license'
+                    });
+                }
+                
+                // Support component - over-time recognition
+                if (product.allocatedComponents.support.amount > 0) {
+                    const monthlyAmount = (product.allocatedComponents.support.amount / contractDuration.months).toFixed(2);
+                    recognitionPatterns.push({
+                        obligation: `${product.name} - Support Component`,
+                        pattern: 'over-time',
+                        timing: 'Straight-line over contract term',
+                        monthlyAmount: monthlyAmount,
+                        totalAmount: product.allocatedComponents.support.amount,
+                        percentage: product.allocatedComponents.support.percentage,
+                        componentType: 'support'
+                    });
+                }
+                
+                // Other component if present
+                if (product.allocatedComponents.other.amount > 0) {
+                    const pattern = 'point-in-time'; // Default for other components
+                    const monthlyAmount = pattern === 'over-time' ? 
+                        (product.allocatedComponents.other.amount / contractDuration.months).toFixed(2) : 0;
+                    
+                    recognitionPatterns.push({
+                        obligation: `${product.name} - ${product.allocatedComponents.other.description}`,
+                        pattern: pattern,
+                        timing: pattern === 'point-in-time' ? 'Upon delivery/completion' : 'Straight-line over contract term',
+                        monthlyAmount: monthlyAmount,
+                        totalAmount: product.allocatedComponents.other.amount,
+                        percentage: product.allocatedComponents.other.percentage,
+                        componentType: 'other'
+                    });
+                }
+            } else if (product.allocatedComponents) {
+                // Handle other products with SSP allocation (legacy support)
                 if (product.allocatedComponents.license.amount > 0) {
                     recognitionPatterns.push({
                         obligation: `${product.name} - License`,
-                        pattern: 'point-in-time', // License is always point-in-time
+                        pattern: 'point-in-time',
                         timing: 'Upon delivery of license key (contract start)',
                         monthlyAmount: 0,
                         totalAmount: product.allocatedComponents.license.amount,
@@ -453,7 +556,7 @@ class ASC606Analyzer {
                     const monthlyAmount = (product.allocatedComponents.support.amount / contractDuration.months).toFixed(2);
                     recognitionPatterns.push({
                         obligation: `${product.name} - Support`,
-                        pattern: 'over-time', // Support is always over-time
+                        pattern: 'over-time',
                         timing: 'Straight-line over contract term',
                         monthlyAmount: monthlyAmount,
                         totalAmount: product.allocatedComponents.support.amount,
@@ -639,14 +742,20 @@ class ASC606Analyzer {
             .filter(p => p.pattern === 'point-in-time')
             .reduce((sum, p) => sum + p.totalAmount, 0);
         
-        const softwareLicenseRevenue = patterns
-            .filter(p => p.pattern === 'point-in-time' && p.obligation.toLowerCase().includes('license'))
+        const licenseComponentRevenue = patterns
+            .filter(p => p.componentType === 'license')
+            .reduce((sum, p) => sum + p.totalAmount, 0);
+            
+        const supportComponentRevenue = patterns
+            .filter(p => p.componentType === 'support')
             .reduce((sum, p) => sum + p.totalAmount, 0);
         
         let assessment = `Revenue recognition: $${pointInTimeRevenue.toLocaleString()} at point in time, $${overTimeRevenue.toLocaleString()} over time`;
         
-        if (softwareLicenseRevenue > 0) {
-            assessment += `. Software licenses ($${softwareLicenseRevenue.toLocaleString()}) recognized upon license key delivery.`;
+        if (licenseComponentRevenue > 0 && supportComponentRevenue > 0) {
+            assessment += `. SSP Allocation: License component ($${licenseComponentRevenue.toLocaleString()}) recognized upon delivery, Support component ($${supportComponentRevenue.toLocaleString()}) recognized ratably.`;
+        } else if (licenseComponentRevenue > 0) {
+            assessment += `. Software licenses ($${licenseComponentRevenue.toLocaleString()}) recognized upon license key delivery.`;
         }
         
         return assessment;
