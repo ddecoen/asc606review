@@ -59,6 +59,23 @@
                             </select>
                         </div>
                     </div>
+                    
+                    <div class="pricing-basis-section">
+                        <h3>Pricing Basis</h3>
+                        <p class="pricing-help">For multi-year contracts, specify whether the product prices below represent annual amounts or total contract value.</p>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="pricingBasis" value="annual" checked>
+                                <span class="radio-text">Annual Amounts</span>
+                                <small>Prices represent annual recurring amounts (recommended for multi-year deals)</small>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="pricingBasis" value="total">
+                                <span class="radio-text">Total Contract Value</span>
+                                <small>Prices represent total amount over entire contract term</small>
+                            </label>
+                        </div>
+                    </div>
                 </section>
 
                 <section class="products-section">
@@ -94,11 +111,11 @@
                                     <input type="text" id="unit0" name="products[0][unit]" placeholder="e.g., users, hours, licenses">
                                 </div>
                                 <div class="form-group">
-                                    <label for="listPrice0">List Price:</label>
+                                    <label for="listPrice0">List Price (per pricing basis above):</label>
                                     <input type="number" id="listPrice0" name="products[0][listPrice]" step="0.01" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="salesPrice0">Sales Price:</label>
+                                    <label for="salesPrice0">Sales Price (per pricing basis above):</label>
                                     <input type="number" id="salesPrice0" name="products[0][salesPrice]" step="0.01" required>
                                 </div>
                             </div>

@@ -79,11 +79,11 @@ class ASC606Analyzer {
                     <input type="text" id="unit${this.productCounter}" name="products[${this.productCounter}][unit]" placeholder="e.g., users, hours, licenses">
                 </div>
                 <div class="form-group">
-                    <label for="listPrice${this.productCounter}">List Price:</label>
+                    <label for="listPrice${this.productCounter}">List Price (per pricing basis above):</label>
                     <input type="number" id="listPrice${this.productCounter}" name="products[${this.productCounter}][listPrice]" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label for="salesPrice${this.productCounter}">Sales Price:</label>
+                    <label for="salesPrice${this.productCounter}">Sales Price (per pricing basis above):</label>
                     <input type="number" id="salesPrice${this.productCounter}" name="products[${this.productCounter}][salesPrice]" step="0.01" required>
                 </div>
             </div>
@@ -159,6 +159,7 @@ class ASC606Analyzer {
             contractLength: parseFloat(formData.get('contractLength')),
             paymentTerms: formData.get('paymentTerms'),
             billingFrequency: formData.get('billingFrequency'),
+            pricingBasis: formData.get('pricingBasis'), // 'annual' or 'total'
             termsText: formData.get('termsText'),
             features: formData.getAll('features'),
             products: []
@@ -167,13 +168,36 @@ class ASC606Analyzer {
         // Parse products
         let productIndex = 0;
         while (formData.get(`products[${productIndex}][name]`)) {
+            const listPrice = parseFloat(formData.get(`products[${productIndex}][listPrice]`));
+            const salesPrice = parseFloat(formData.get(`products[${productIndex}][salesPrice]`));
+            const quantity = parseFloat(formData.get(`products[${productIndex}][quantity]`));
+            
+            // Calculate annual and total values based on pricing basis
+            let annualListPrice, annualSalesPrice, totalListPrice, totalSalesPrice;
+            
+            if (data.pricingBasis === 'annual') {
+                annualListPrice = listPrice;
+                annualSalesPrice = salesPrice;
+                totalListPrice = listPrice * data.contractLength;
+                totalSalesPrice = salesPrice * data.contractLength;
+            } else {
+                totalListPrice = listPrice;
+                totalSalesPrice = salesPrice;
+                annualListPrice = listPrice / data.contractLength;
+                annualSalesPrice = salesPrice / data.contractLength;
+            }
+            
             const product = {
                 name: formData.get(`products[${productIndex}][name]`),
                 type: formData.get(`products[${productIndex}][type]`),
-                quantity: parseFloat(formData.get(`products[${productIndex}][quantity]`)),
+                quantity: quantity,
                 unit: formData.get(`products[${productIndex}][unit]`),
-                listPrice: parseFloat(formData.get(`products[${productIndex}][listPrice]`)),
-                salesPrice: parseFloat(formData.get(`products[${productIndex}][salesPrice]`)),
+                listPrice: listPrice, // As entered
+                salesPrice: salesPrice, // As entered
+                annualListPrice: annualListPrice,
+                annualSalesPrice: annualSalesPrice,
+                totalListPrice: totalListPrice,
+                totalSalesPrice: totalSalesPrice,
                 description: formData.get(`products[${productIndex}][description]`),
                 // SSP Allocation data
                 licenseAllocation: parseFloat(formData.get(`products[${productIndex}][licenseAllocation]`)) || 0,
@@ -181,22 +205,28 @@ class ASC606Analyzer {
                 otherAllocation: parseFloat(formData.get(`products[${productIndex}][otherAllocation]`)) || 0,
                 otherDescription: formData.get(`products[${productIndex}][otherDescription]`) || ''
             };
-            product.totalValue = product.quantity * product.salesPrice;
             
-            // Calculate allocated amounts if SSP allocation is provided
+            // Use total contract value for calculations
+            product.totalValue = product.quantity * product.totalSalesPrice;
+            product.annualValue = product.quantity * product.annualSalesPrice;
+            
+            // Calculate allocated amounts if SSP allocation is provided (based on total contract value)
             if (product.licenseAllocation > 0 || product.supportAllocation > 0 || product.otherAllocation > 0) {
                 product.allocatedComponents = {
                     license: {
                         percentage: product.licenseAllocation,
-                        amount: (product.totalValue * product.licenseAllocation / 100)
+                        amount: (product.totalValue * product.licenseAllocation / 100),
+                        annualAmount: (product.annualValue * product.licenseAllocation / 100)
                     },
                     support: {
                         percentage: product.supportAllocation,
-                        amount: (product.totalValue * product.supportAllocation / 100)
+                        amount: (product.totalValue * product.supportAllocation / 100),
+                        annualAmount: (product.annualValue * product.supportAllocation / 100)
                     },
                     other: {
                         percentage: product.otherAllocation,
                         amount: (product.totalValue * product.otherAllocation / 100),
+                        annualAmount: (product.annualValue * product.otherAllocation / 100),
                         description: product.otherDescription
                     }
                 };
@@ -226,11 +256,14 @@ class ASC606Analyzer {
 
     generateContractOverview(data) {
         const totalValue = data.products.reduce((sum, product) => sum + product.totalValue, 0);
+        const annualValue = data.products.reduce((sum, product) => sum + product.annualValue, 0);
         const contractDuration = this.calculateContractDuration(data.contractStart, data.contractEnd);
         
         return {
             customer: data.customer,
             totalValue: totalValue,
+            annualValue: annualValue,
+            pricingBasis: data.pricingBasis,
             duration: contractDuration,
             startDate: data.contractStart,
             endDate: data.contractEnd,
@@ -363,7 +396,7 @@ class ASC606Analyzer {
             case 'hardware':
                 return 'point-in-time';
             case 'software-license':
-                // Software licenses are recognized at point-in-time when license key is delivered
+                // Software licenses are recognized at point-in-time upon delivery of the license key
                 // Performance obligation is satisfied upon delivery of the license key
                 return 'point-in-time';
             case 'saas':
@@ -786,13 +819,21 @@ class ASC606Analyzer {
                         <strong>Customer:</strong> ${analysis.contractOverview.customer}
                     </div>
                     <div class="overview-item">
-                        <strong>Total Value:</strong> $${analysis.contractOverview.totalValue.toLocaleString()}
+                        <strong>Annual Value:</strong> $${analysis.contractOverview.annualValue.toLocaleString()}
+                        ${analysis.contractOverview.pricingBasis === 'annual' ? '<span class="basis-note">(as entered)</span>' : '<span class="basis-note">(calculated)</span>'}
+                    </div>
+                    <div class="overview-item">
+                        <strong>Total Contract Value:</strong> $${analysis.contractOverview.totalValue.toLocaleString()}
+                        ${analysis.contractOverview.pricingBasis === 'total' ? '<span class="basis-note">(as entered)</span>' : '<span class="basis-note">(calculated)</span>'}
                     </div>
                     <div class="overview-item">
                         <strong>Duration:</strong> ${analysis.contractOverview.duration.years} years (${analysis.contractOverview.duration.months} months)
                     </div>
                     <div class="overview-item">
                         <strong>Products:</strong> ${analysis.contractOverview.productCount}
+                    </div>
+                    <div class="overview-item">
+                        <strong>Pricing Basis:</strong> ${analysis.contractOverview.pricingBasis === 'annual' ? 'Annual Amounts' : 'Total Contract Value'}
                     </div>
                 </div>
             </div>
